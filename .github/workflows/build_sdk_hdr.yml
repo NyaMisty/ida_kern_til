@@ -31,9 +31,10 @@ jobs:
           pip3 install alive-progress requests
       - name: Process SDK
         run: |
-          export PYTHONIOENCODING=UTF-8
+          reg add "HKCU\Software\Hex-Rays\IDA" /v "License docker-wine-ida" /t REG_DWORD /d 1 /f
+          set PYTHONIOENCODING=UTF-8
           python3 process_sdk.py ${{ github.event.inputs.idasdk_version }}
-        shell: bash
+        shell: cmd
       #- name: Prepare to push  
       #  run: git branch -f master
       - name: Upload artifacts

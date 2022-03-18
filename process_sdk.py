@@ -55,7 +55,7 @@ def prepare_ida(sdkver):
     
     if not IDA_PATH.exists():
         logging.info('Preparing IDA Tools...')
-        downfile('https://onepoint.misty.workers.dev/gd-pub-temp/ida-leak/IDA-7.7.220118-fullpatch.zip', 'ida77.zip')   
+        downfile('https://onepoint.misty.workers.dev/gd-pub-temp/ida-leak-wine/IDA-7.7.220118-fullpatch-wine.zip', 'ida77.zip')   
         IDA_PATH.mkdir()
         shutil.unpack_archive(d / 'ida77.zip', IDA_PATH)
         
