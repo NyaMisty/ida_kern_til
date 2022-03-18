@@ -26,6 +26,9 @@ jobs:
         run: |
           git config --global user.email "misty@misty.moe"
           git config --global user.name "NyaMisty"
+      - name: Install dependencies
+        run: |
+          pip3 install alive-progress requests
       - name: Process SDK
         run: |
           python3 process_sdk.py ${{ github.event.inputs.idasdk_version }}
@@ -41,7 +44,7 @@ jobs:
           artifacts: "output_tils/*"
           token: ${{ secrets.GITHUB_TOKEN }}
           name: ${{ format('AutoBuild - {0}', github.event.commits[0].message) }}
-          tag: "idasdk${{ github.event.inputs.release_tag }}"
+          tag: "${{ github.event.inputs.release_tag }}"
           commit: master
           #prerelease: true
           allowUpdates: true

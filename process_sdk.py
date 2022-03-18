@@ -3,9 +3,10 @@ import shutil
 from pathlib import Path
 import subprocess
 from zipfile import ZipFile
-from alive_progress import alive_bar
 import tempfile
 
+import requests
+from alive_progress import alive_bar
 
 import logging
 logging.basicConfig(level=logging.INFO,
@@ -25,7 +26,6 @@ def prepare_ida(sdkver):
 
     def downfile(url, fn=None):
         logging.info('Downloading: %s', url)
-        import requests
         if not fn:
             fn = url.split('/')[-1]
         if isinstance(fn, Path):
