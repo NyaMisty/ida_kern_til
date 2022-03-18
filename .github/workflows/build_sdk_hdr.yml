@@ -1,0 +1,49 @@
+name: Build IDA SDK tils
+
+on:
+  workflow_dispatch:
+    inputs:
+      idasdk_version:
+        description: 'IDA SDK Version to build (must be uploaded to gdrive first)'
+        required: true
+        default: 77
+      release_tag:
+        description: 'Release tag for Github'
+        required: true
+        default: ida77
+
+
+jobs:
+  build_til:
+    runs-on: windows-latest
+    steps: 
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: master             # set the branch to merge to
+          fetch-depth: 0
+      - name: Setup committer
+        run: |
+          git config --global user.email "misty@misty.moe"
+          git config --global user.name "NyaMisty"
+      - name: Process SDK
+        run: |
+          python3 process_sdk.py ${{ github.event.inputs.idasdk_version }}
+      #- name: Prepare to push  
+      #  run: git branch -f master
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: output_tils/*
+      - name: "Upload to Github Prerelease"
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "output_tils/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ format('AutoBuild - {0}', github.event.commits[0].message) }}
+          tag: "idasdk${{ github.event.inputs.release_tag }}"
+          commit: master
+          #prerelease: true
+          allowUpdates: true
+          removeArtifacts: true
+          artifactErrorsFailBuild: true
