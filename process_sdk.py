@@ -36,7 +36,7 @@ def prepare_ida(sdkver):
         l = int(r.headers['Content-Length'])
         
         with open(p, 'wb') as f:
-            with alive_bar((l-1)//1024 + 1) as bar:
+            with alive_bar((l-1)//1024 + 1, force_tty=True) as bar:
                 for i in r.iter_content(chunk_size=1024):
                     f.write(i)
                     bar()
