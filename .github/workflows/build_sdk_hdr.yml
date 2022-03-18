@@ -11,11 +11,15 @@ on:
         description: 'Release tag for Github'
         required: true
         default: ida77
+      debug_enabled:
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'     
+        required: false
+        default: false
 
 
 jobs:
   build_til:
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps: 
       - name: Checkout
         uses: actions/checkout@v2
@@ -26,9 +30,13 @@ jobs:
         run: |
           git config --global user.email "misty@misty.moe"
           git config --global user.name "NyaMisty"
-      - name: Install dependencies
-        run: |
-          pip3 install alive-progress requests
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+          architecture: x64
+          cache: 'pip'
+      - run: pip3 install -r requirements.txt
       - name: Process SDK
         run: |
           reg add "HKCU\Software\Hex-Rays\IDA" /v "License docker-wine-ida" /t REG_DWORD /d 1 /f
@@ -37,6 +45,10 @@ jobs:
         shell: cmd
       #- name: Prepare to push  
       #  run: git branch -f master
+      - name: Setup tmate session
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
+        uses: mxschmitt/action-tmate@master
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -46,7 +58,7 @@ jobs:
         with:
           artifacts: "output_tils/*"
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: ${{ format('AutoBuild - {0}', github.event.commits[0].message) }}
+          name: "${{ format('{0}: tils for IDA {1}', github.event.inputs.release_tag, github.event.inputs.idasdk_version) }}"
           tag: "${{ github.event.inputs.release_tag }}"
           commit: master
           #prerelease: true

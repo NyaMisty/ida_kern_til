@@ -1,0 +1,3 @@
+requests
+alive-progress
+git+https://github.com/NyaMisty/ctypeslib@master#egg=ctypeslib2

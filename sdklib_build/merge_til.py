@@ -54,6 +54,7 @@ try:
         print('Final types: %s' % name)
         name = next_named_type(finaltil, name, NTF_TYPE)
     
+    print('Writing final til to %s' % TILPATH)
     assert store_til(finaltil, None, TILPATH)
     if True:
         set_database_flag(DBFL_KILL)

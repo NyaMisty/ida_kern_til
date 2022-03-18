@@ -87,18 +87,19 @@ def do_idaclang_build(platform, version):
     ida_path = Path(os.path.relpath(IDA_PATH, build_dir))
     sdk_path = Path(os.path.relpath(SDK_PATH, build_dir))
     out_dir = Path(os.path.relpath(OUT_DIR, build_dir))
+    toLinuxPath = lambda x: str(x).replace('\\', '/')
     command = [
         'make',
         '-f', '%s' % (f'idasdk_{platform}.mak'),
         'TIL_NAME=%s' % get_til_prefix(platform, version), 
         'IDASDK_DESC=%s' % (f"IDA{version} {platform}"), 
-        'IDASDK=%s' % SDK_PATH,
-        'IDACLANG=%s' % (IDA_PATH / 'idaclang.exe'),
-        'TILIB64=%s' % (IDA_PATH / 'tilib64.exe'),
-        'TIL_OUT_DIR=%s' % (out_dir)
+        'IDASDK=%s' % toLinuxPath(sdk_path),
+        'IDACLANG=%s' % toLinuxPath(ida_path / 'idaclang.exe'),
+        'TILIB64=%s' % toLinuxPath(ida_path / 'tilib64.exe'),
+        'TIL_OUT_DIR=%s' % toLinuxPath(out_dir)
         ]
     
-    subprocess.call(command, cwd=build_dir)
+    call_process(command, cwd=build_dir)
 
 def do_idatil_extract(libtype, platform, version):
     build_dir = ROOT_DIR / 'sdklib_build'
@@ -153,6 +154,7 @@ def do_export_til_headers():
 def main(args):
     sdk_ver = args[0]
     prepare_ida(sdk_ver)
+    OUT_DIR.mkdir(exist_ok=True)
     do_idaclang_build('win', sdk_ver)
     do_idatil_extract('x64_win_vc_64_s', 'win', sdk_ver)
     do_export_til_headers()
