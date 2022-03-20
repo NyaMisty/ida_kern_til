@@ -318,14 +318,16 @@ def gen_ctypes(hdrLoc, outLoc):
     rewrite_ida_header(hdrLoc, outCpp)
     out = subprocess.check_output(['clang2py', '--verbose', outCpp], encoding='utf-8')
     wraps, sep, defs = out.partition("_libraries = {}\n_libraries['FIXME_STUB'] = FunctionFactoryStub() #  ctypes.CDLL('FIXME_STUB')\n")
+    if not defs:
+        wraps, sep, defs = out.partition("    c_long_double_t = ctypes.c_ubyte*8\n")
     def_patched = defs.replace('\n', '\n    ').replace('ctypes.POINTER(ctypes.c_char)', 'ctypes.c_char_p')
     newdef = '\n\n'
     newdef += 'def ctypeslib_define():'
     newdef += def_patched
     newdef += '\n    return locals()'
     newdef += '\n'
-    with open(outLoc, 'w') as f:
-        f.write(wraps + sep + newdef)
+    with open(outLoc, 'wb') as f:
+        f.write((wraps + sep + newdef).encode())
 
 
 def main(args):
