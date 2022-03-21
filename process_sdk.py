@@ -146,8 +146,10 @@ def do_idatil_extract(libtype, platform, version):
 def do_export_til_headers():
     for c in OUT_DIR.glob('*.til'):
         h = c.with_suffix('.h')
-        with open(h, 'wb') as f:
-            subprocess.run([IDA_PATH / 'tilib64.exe', '-lc', c], cwd=OUT_DIR, stdout=f)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmptil = Path(shutil.copy(c, tmpdir))
+            with open(h, 'wb') as f:
+                subprocess.run([IDA_PATH / 'tilib64.exe', '-lc', tmptil], cwd=OUT_DIR, stdout=f)
         py = c.with_suffix('.py')
         call_process(['python3', ROOT_DIR / 'tils2py' / 'gen_interop_til.py', h, py], cwd=OUT_DIR)
 
