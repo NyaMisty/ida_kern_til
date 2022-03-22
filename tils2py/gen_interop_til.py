@@ -4,6 +4,8 @@ import re
 import subprocess
 from collections import OrderedDict
 
+import io
+
 from pathlib import Path
 ROOT_DIR = Path(__file__).absolute().parent
 
@@ -146,12 +148,14 @@ def parseDecls(types):
         if line.startswith('/*'):
             continue
         
+        oriTypeLen = len(type_defs)
         if _line.startswith('enum '):
             matches = re.findall(r'enum (%s) (:|{)' % identifierPat, _line)
             if not matches:
                 print(line)
             match = matches[0][0]
             #identifiers.append('enum ' + match)
+            line = re.sub('^enum ', 'enum class ', line)
             add_type('enum', match, line)
         elif _line.startswith('union '):
             match = re.findall(r'union (%s) {' % identifierPat, _line)[0]
@@ -166,7 +170,7 @@ def parseDecls(types):
                 if not isinstance(m, tuple):
                     m = [m]
                 add_type('struct', m[0], line)
-        elif line.startswith('typedef '):
+        elif _line.startswith('typedef '):
             matches = []
             matches += re.findall(r'typedef .*?(%s);' % identifierPat, _line)
             matches += re.findall(r'typedef .*?(%s)\(.*?\);' % identifierPat, _line)
@@ -178,12 +182,13 @@ def parseDecls(types):
             add_type('typedef', matches[0], line)
         else:
             assert False
+        if len(type_defs) - oriTypeLen != 1:
+            print(line)
+            assert False
     return type_defs
 
-def rewrite_ida_header(hdrLoc, outLoc):
-    with open(hdrLoc, 'r') as f:
-        content = f.read()
-    
+def sanitizeHdr(hdrContent):
+    content = hdrContent
     #content = content.replace(';', ';\n').replace('{', '{\n').replace('}', '}\n')
     
     #BLACKLIST = ['procmod_t', '__m128i']
@@ -199,8 +204,8 @@ def rewrite_ida_header(hdrLoc, outLoc):
     #    content = re.sub(r'\n(typedef .*? [*]*?' + typeName + ';)\n', '\n/*\\1*/\n', content)
 
     # remove vft
-    content = re.sub(r'\nstruct /\*VFT\*/ ((.*?_vtbl) {.*?};)\n', '\nstruct \\2; /* \\1*/\n', content)
-
+    content = re.sub(r'^struct /\*VFT\*/ ((.*?_vtbl) {.*?};)$', r'struct \2; /* \1*/', content, flags=re.MULTILINE)
+    
     content = re.sub(r'#\d+ ', 'void ', content)
 
     # remove coments
@@ -210,6 +215,9 @@ def rewrite_ida_header(hdrLoc, outLoc):
     
     content = re.sub(r'\nenum ([%s]+?) : __int32 ' % IDENTIFIER, '\nenum \\1 : unsigned __int32 ', content)
     
+    return content
+
+def parseHdr(content):
     types, _, symbols = content.partition('\n\n')
     
     type_defs = parseDecls(types)
@@ -218,16 +226,9 @@ def rewrite_ida_header(hdrLoc, outLoc):
 
     assert len(type_defs) == len(types.splitlines())
 
-    for t in list(type_defs.keys()):
-        if type_defs[t].typClass == 'typedef':
-            if t in TYPEDEF_BLACKLIST:
-                type_defs.pop(t)
-                continue
-        if type_defs[t].typClass == 'struct':
-            if t in STRUCT_BLACKLIST:
-                type_defs.pop(t)
-                continue
+    return type_defs, symbols
 
+def outputCtypesLibCpp(type_defs, symbols):
     # analyse the type hierarchy
     type_defs_sorted = OrderedDict(sorted(type_defs.items(), key=lambda x: len(x[0]), reverse=True))
     typeDefDeps = {}
@@ -301,22 +302,71 @@ def rewrite_ida_header(hdrLoc, outLoc):
             symLine = '// ' + symLine
         symbolLines.append(symLine)
     
-    common_hdr = os.path.relpath(ROOT_DIR / 'common.h', Path(outLoc).absolute().parent)
-    with open(outLoc, 'w') as f:
-        f.write('#include "%s"\n\n' % common_hdr)
-        
-        f.write('\n'.join('struct %s;' % n for n,t in type_defs_sorted.items() if t.typClass == 'struct'))
-        f.write('\n\n')
-        f.write('\n'.join(c.typDef for c in typeLines))
-        f.write('\n\n')
-        f.write('namespace SymbolsNamespace {\n')
-        f.write('\n'.join(c for c in symbolLines))
-        f.write('\n\n}')
+    f = io.StringIO()
+    f.write('\n'.join('struct %s;' % n for n,t in type_defs_sorted.items() if t.typClass == 'struct'))
+    f.write('\n\n')
+    f.write('\n'.join(c.typDef for c in typeLines))
+    f.write('\n\n')
+    f.write('namespace SymbolsNamespace {\n')
+    f.write('\n'.join(c for c in symbolLines))
+    f.write('\n\n}')
+    return re.sub(r'ANTICOLLISION[0-9]*?_', '', f.getvalue())
 
-def gen_ctypes(hdrLoc, outLoc):
+def rewrite_ida_header(hdrContent, depHdrs):
+    content = sanitizeHdr(hdrContent)
+    type_defs, symbols = parseHdr(content)
+    for t in list(type_defs.keys()):
+        if type_defs[t].typClass == 'typedef':
+            if t in TYPEDEF_BLACKLIST:
+                type_defs.pop(t)
+                continue
+        if type_defs[t].typClass == 'struct':
+            if t in STRUCT_BLACKLIST:
+                type_defs.pop(t)
+                continue
+
+    deps = '\n'.join([open(Path(c).with_suffix('.cpp')).read() for c in depHdrs])
+
+    for t in list(type_defs.keys()):
+        if re.search(r' %s [{:]' % t, deps):
+            type_defs.pop(t)
+            
+    return outputCtypesLibCpp(type_defs, symbols)
+        
+
+def remove_base_types(content, depHdrs):
+    oriLines = content.split('\n')
+    depLines = sum([open(c).read().split('\n') for c in depHdrs], [])
+    newLines = list(filter(lambda x: (x.strip() == '') or x not in depLines, oriLines))
+    return '\n'.join(newLines)
+
+def gen_ctypes(hdrLoc, outLoc, depends=()):
+    with open(hdrLoc, 'r') as f:
+        content = f.read()
+    
+    content = remove_base_types(content, depends)
+    
     outCpp = hdrLoc.replace('.h', '.cpp')
-    rewrite_ida_header(hdrLoc, outCpp)
-    out = subprocess.check_output(['clang2py', '--verbose', outCpp], encoding='utf-8')
+    with open(outCpp, 'w') as f:
+        f.write(content)
+    outCppContent = rewrite_ida_header(content, depends)
+    getIncStmt = lambda hdrpath: '#include "%s"' % os.path.relpath(hdrpath, Path(outCpp).absolute().parent).replace('\\', '/')
+    incls = []
+
+    incls.append(getIncStmt(ROOT_DIR / 'common.h'))
+    for path in depends:
+        incls.append(getIncStmt(path.replace('.h', '.cpp')))
+
+    inclGuard = 'INCLUDE_GUARD_%s' % (re.sub('[^A-Za-z0-9_]', '_', Path(outLoc).stem))
+    with open(outCpp, 'w') as f:
+        f.write('#ifndef %s\n' % inclGuard
+            + '#define %s\n' % inclGuard
+            + '\n'.join(incls) + '\n\n' + outCppContent
+            + '\n\n#endif\n'
+        )
+    
+    out = subprocess.check_output(['clang2py', '--verbose', '-i', '-x', outCpp], encoding='utf-8')
+    
     wraps, sep, defs = out.partition("_libraries = {}\n_libraries['FIXME_STUB'] = FunctionFactoryStub() #  ctypes.CDLL('FIXME_STUB')\n")
     if not defs:
         wraps, sep, defs = out.partition("    c_long_double_t = ctypes.c_ubyte*8\n")
@@ -326,6 +376,7 @@ def gen_ctypes(hdrLoc, outLoc):
     newdef += def_patched
     newdef += '\n    return locals()'
     newdef += '\n'
+    
     with open(outLoc, 'wb') as f:
         f.write((wraps + sep + newdef).encode())
 
@@ -334,7 +385,7 @@ def main(args):
     if not args:
         gen_ctypes('idasdk_win/idasdk_win.h', 'idasdk_win/idasdk_win.py')
     else:
-        gen_ctypes(args[0], args[1])
+        gen_ctypes(args[0], args[1], args[2:])
 
 if __name__ == '__main__':
     import sys

@@ -3,9 +3,8 @@
 #include <bytes.hpp>
 #include <compress.hpp>
 #include <config.hpp>
-#include <dbg.hpp>
+
 #include <demangle.hpp>
-#include <dirtree.hpp>
 #include <diskio.hpp>
 #include <entry.hpp>
 #include <enum.hpp>
@@ -21,7 +20,6 @@
 #include <help.h>
 #include <ida.hpp>
 #include <ida_highlighter.hpp>
-#include <idd.hpp>
 #include <idp.hpp>
 #include <ieee.h>
 //#include <intel.hpp>
@@ -32,7 +30,6 @@
 #include <llong.hpp>
 #include <loader.hpp>
 #include <md5.h>
-#include <moves.hpp>
 #include <nalt.hpp>
 #include <name.hpp>
 #include <netnode.hpp>
@@ -56,3 +53,13 @@
 #include <ua.hpp>
 //#include <workarounds.hpp>
 #include <xref.hpp>
+
+#define dirtree_mkdir ANTICOLLISION_dirtree_mkdir
+#define dirtree_rmdir ANTICOLLISION_dirtree_rmdir
+#define dirtree_link ANTICOLLISION_dirtree_link
+#define ev_update_call_stack ANTICOLLISION_ev_update_call_stack
+
+#include <dirtree.hpp>
+#include <moves.hpp>
+#include <idd.hpp>
+#include <dbg.hpp>

@@ -5,6 +5,8 @@ import subprocess
 from zipfile import ZipFile
 import tempfile
 import shlex
+import re
+import io
 
 import requests
 from alive_progress import alive_bar
@@ -143,15 +145,42 @@ def do_idatil_extract(libtype, platform, version):
 
         call_process([IDA_PATH / 'tilib64.exe', '-#-', outputtil], cwd=objs)
 
-def do_export_til_headers():
+def do_export_til_py(dependency_rule):
+    done = []
+    depRelation = {}
     for c in OUT_DIR.glob('*.til'):
+        filename = c.stem
+        depRelation[c] = []
+        for k,depends in dependency_rule.items():
+            if not re.findall(k, filename):
+                continue
+            for dep in depends:
+                _dep = re.sub(k, dep, filename)
+                depRelation[c].append(c.with_name(_dep + c.suffix))
+            break
+    
+    while depRelation:
+        c = None
+        deps = None
+        for item in list(depRelation.keys()):
+            if all(t in done for t in depRelation[item]):
+                c = item
+                deps = depRelation.pop(c)
+                break
+
         h = c.with_suffix('.h')
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmptil = Path(shutil.copy(c, tmpdir))
-            with open(h, 'wb') as f:
-                subprocess.run([IDA_PATH / 'tilib64.exe', '-lc', tmptil], cwd=OUT_DIR, stdout=f)
+        with open(h, 'w') as f:
+            subprocess.run([IDA_PATH / 'tilib64.exe', '-lc', c], cwd=OUT_DIR, encoding='utf-8', stdout=f)
+        with open(h) as f:
+            content = f.read()
+        
+        content = re.sub(r'ANTICOLLISION[0-9]*?_', '', content)
+        with open(h, 'w') as f:
+            f.write(content)
         py = c.with_suffix('.py')
-        call_process(['python3', ROOT_DIR / 'tils2py' / 'gen_interop_til.py', h, py], cwd=OUT_DIR)
+        deparg = [] if not deps else [str(c.with_suffix('.h')) for c in deps]
+        call_process(['python3', ROOT_DIR / 'tils2py' / 'gen_interop_til.py', h, py, *deparg], cwd=OUT_DIR)
+        done.append(c)
 
 def main(args):
     sdk_ver = args[0]
@@ -159,7 +188,11 @@ def main(args):
     OUT_DIR.mkdir(exist_ok=True)
     do_idaclang_build('win', sdk_ver)
     do_idatil_extract('x64_win_vc_64_s', 'win', sdk_ver)
-    do_export_til_headers()
+    do_export_til_py({
+        r'ida(.*?)_sdk': [r'ida\1_base'],
+        r'ida(.*?)_libtypes': [r'ida\1_base', r'ida\1_sdk'],
+        r'ida(.*?)_hexrays': [r'ida\1_base', r'ida\1_sdk'],
+    })
 
 if __name__ == '__main__':
     import sys
