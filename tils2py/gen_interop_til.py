@@ -364,15 +364,39 @@ def gen_ctypes(hdrLoc, outLoc, depends=()):
             + '\n'.join(incls) + '\n\n' + outCppContent
             + '\n\n#endif\n'
         )
-    
-    out = subprocess.check_output(['clang2py', '--verbose', '-i', '-x', outCpp], encoding='utf-8')
+    if not depends:
+        # for base.cpp, we still have to include object in common.h
+        out = subprocess.check_output(['clang2py', '--verbose', '-i', '-x', outCpp], encoding='utf-8')
+    else:
+        # for others, which include "XXX.cpp", we forcibly remove all included object
+        out = subprocess.check_output(['clang2py', '--verbose', '-i', '-X', outCpp], encoding='utf-8')
     
     wraps, sep, defs = out.partition("_libraries = {}\n_libraries['FIXME_STUB'] = FunctionFactoryStub() #  ctypes.CDLL('FIXME_STUB')\n")
     if not defs:
         wraps, sep, defs = out.partition("    c_long_double_t = ctypes.c_ubyte*8\n")
     def_patched = defs.replace('\n', '\n    ').replace('ctypes.POINTER(ctypes.c_char)', 'ctypes.c_char_p')
     newdef = '\n\n'
-    newdef += 'def ctypeslib_define():'
+    newdef += r'''
+def ctypeslib_define(__defs=[]):
+    oriGlobals = globals().copy()
+    def recGlob():
+        for k in dict(globals()):
+            if not k in oriGlobals:
+                globals().pop(k)
+        globals().update(oriGlobals)
+    globals().update(__defs)
+
+    ret = None
+    try:
+        ret = _ctypeslib_define()
+    except:
+        recGlob()
+        raise
+    recGlob()
+    return ret
+
+'''
+    newdef += 'def _ctypeslib_define():'
     newdef += def_patched
     newdef += '\n    return locals()'
     newdef += '\n'
