@@ -51,6 +51,11 @@ def prepare_ida(sdkver):
         logging.info('Preparing IDA SDK...')
         downfile('https://github.com/NyaMisty/idasdk-collection/raw/master/' + f'idasdk{sdkver}.zip')
         shutil.unpack_archive(d / f'idasdk{sdkver}.zip', d)
+        # IDA v8.0 and later uses name idasdk_proXX
+        try:
+            os.rename(d / f'idasdk_pro{sdkver}', d / f'idasdk{sdkver}')
+        except:
+            pass
         SDK_PATH = d / f'idasdk{sdkver}'
         
         hx_file = 'hexrays%s.hpp' % sdkver
