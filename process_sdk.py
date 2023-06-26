@@ -111,6 +111,12 @@ def do_idaclang_build(platform, version):
 def do_idatil_extract(libtype, platform, version):
     build_dir = ROOT_DIR / 'sdklib_build'
     libpath = SDK_PATH / 'lib' / libtype
+    if not libpath.exists():
+        print("%s not exists!" % libpath)
+        libpath = SDK_PATH / 'lib' / (libtype + "_pro")
+    if not libpath.exists():
+        print("%s not exists!" % libpath)
+        sys.exit(1)
     objs = libpath / 'objs'
     objs.mkdir(exist_ok=True)
     call_process(['7z', 'e', '-aoa', libpath / 'pro.lib'], cwd=objs)
