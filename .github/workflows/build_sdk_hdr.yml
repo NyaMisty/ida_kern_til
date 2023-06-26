@@ -46,7 +46,7 @@ jobs:
       #- name: Prepare to push  
       #  run: git branch -f master
       - name: Setup tmate session
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
         uses: mxschmitt/action-tmate@master
 
       - name: Upload artifacts
